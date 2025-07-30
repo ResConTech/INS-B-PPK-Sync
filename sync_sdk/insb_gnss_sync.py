@@ -201,6 +201,15 @@ def align_ppk_and_ins_data(cleaned_ins_df: pd.DataFrame, ppk_df: pd.DataFrame,
         first_time_match = np.argmin(np.abs(ins_time - ppk_start))
         cleaned_ins_df = cleaned_ins_df.loc[first_time_match:, :].reset_index(drop=True)
     
+    # Apply synchronized starting point using second PPK sample (same logic as decimation)
+    if len(ppk_df) > 1:
+        second_ppk_time = ppk_df['GPST'].iloc[1]
+        ins_times = cleaned_ins_df['GPS Time'].values
+        sync_start_idx = np.argmin(np.abs(ins_times - second_ppk_time))
+        # Drop first PPK sample and align INS data to second PPK timestamp
+        ppk_df = ppk_df.iloc[1:].reset_index(drop=True)
+        cleaned_ins_df = cleaned_ins_df.iloc[sync_start_idx:].reset_index(drop=True)
+    
     # Trim PPK data to not exceed INS end time (keep full INS data)
     ppk_df = trim_ppk_to_ins_end(ppk_df, cleaned_ins_df)
     
@@ -224,16 +233,9 @@ def create_decimated_data(ppk_df: pd.DataFrame, aligned_ins_df: pd.DataFrame,
     """
     decimation_factor = int(sr_ppk / sr_ins)
     
-    # Find synchronized starting point by aligning with second PPK timestamp
-    if len(ppk_df) > 1:
-        second_ppk_time = ppk_df['GPST'].iloc[1]
-        ins_times = aligned_ins_df['GPS Time'].values
-        start_idx = np.argmin(np.abs(ins_times - second_ppk_time))
-        # Drop the first PPK sample since we're syncing with the second one
-        ppk_df_sync = ppk_df.iloc[1:].reset_index(drop=True)
-    else:
-        start_idx = 0
-        ppk_df_sync = ppk_df
+    # Data is already synchronized from main alignment, start decimation from index 0
+    start_idx = 0
+    ppk_df_sync = ppk_df
     
     # Apply decimation starting from synchronized index
     decimated_ins_df = aligned_ins_df.iloc[start_idx::decimation_factor, :].reset_index(drop=True)
