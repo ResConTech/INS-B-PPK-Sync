@@ -150,6 +150,27 @@ def convert_ppk_time_to_milliseconds(ppk_df: pd.DataFrame, num_days: int) -> pd.
     return ppk_df_copy
 
 
+def trim_ppk_to_ins_end(ppk_df: pd.DataFrame, ins_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Trim PPK data to match the end time of INS data.
+    
+    Args:
+        ppk_df (pd.DataFrame): PPK dataframe with GPST timestamps
+        ins_df (pd.DataFrame): INS dataframe with GPS Time timestamps
+        
+    Returns:
+        pd.DataFrame: Trimmed PPK dataframe
+    """
+    ins_end_time = ins_df['GPS Time'].iloc[-1]
+    ppk_times = ppk_df['GPST'].values
+    
+    # Find PPK samples that are within INS recording time
+    valid_ppk_mask = ppk_times <= ins_end_time
+    trimmed_ppk_df = ppk_df[valid_ppk_mask].reset_index(drop=True)
+    
+    return trimmed_ppk_df
+
+
 def align_ppk_and_ins_data(cleaned_ins_df: pd.DataFrame, ppk_df: pd.DataFrame, 
                           output_decimated_ins: bool = False, sr_ppk: float = 0.2, 
                           sr_ins: float = 0.02) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -180,12 +201,11 @@ def align_ppk_and_ins_data(cleaned_ins_df: pd.DataFrame, ppk_df: pd.DataFrame,
         first_time_match = np.argmin(np.abs(ins_time - ppk_start))
         cleaned_ins_df = cleaned_ins_df.loc[first_time_match:, :].reset_index(drop=True)
     
-    # Align end times based on PPK data
-    ppk_end = ppk_df['GPST'].iloc[-1]
-    ins_end_match = np.argmin(np.abs(ins_time - ppk_end))
-    aligned_ins_df = cleaned_ins_df.loc[:ins_end_match, :].reset_index(drop=True)
+    # Trim PPK data to not exceed INS end time (keep full INS data)
+    ppk_df = trim_ppk_to_ins_end(ppk_df, cleaned_ins_df)
     
-    return ppk_df, aligned_ins_df
+    # Return both datasets - PPK trimmed to INS range, INS data kept full
+    return ppk_df, cleaned_ins_df
 
 
 def create_decimated_data(ppk_df: pd.DataFrame, aligned_ins_df: pd.DataFrame, 
